@@ -14,8 +14,6 @@ Param
     [string] $VNetName                            # Virtual network name of VM
 )
 
-
-
 #Check the Azure PowerShell module version
 Write-Host "Checking Azure PowerShell module verion" -ForegroundColor Green
 $APSMajor =(Get-Module azure).version.Major
@@ -73,12 +71,12 @@ if ( $sourceVM.Status -notmatch "Stopped" )
     $sourceVM | Stop-AzureVM
 
     # wait until the VM is shut down
-    $VMStatus = (Get-AzureVM –ServiceName $CloudServiceName –Name $vmName).Status
+    $VMStatus = (Get-AzureVM –ServiceName $CloudServiceName –Name $VMName).Status
     while ($VMStatus -notmatch "Stopped") 
     {
         Write-Host "Waiting VM $vmName to shut down, current status is $VMStatus" -ForegroundColor Green
         Sleep -Seconds 5
-        $VMStatus = (Get-AzureVM –ServiceName $CloudServiceName –Name $vmName).Status
+        $VMStatus = (Get-AzureVM –ServiceName $CloudServiceName –Name $VMName).Status
     } 
 }
 
@@ -183,7 +181,7 @@ foreach($disk in $allDisks)
 # Create OS and data disks 
 Write-Host "Add VM OS Disk " $destOSDisk.MediaLink -ForegroundColor Green
 Add-AzureDisk -OS $sourceOSDisk.OS -DiskName $sourceOSDisk.DiskName -MediaLocation $destOSDisk.ICloudBlob.Uri
-
+# Attached the copied data disks to the new VM
 foreach($currenDataDisk in $destDataDisks)
 {
     $diskName = ($sourceDataDisks | ? {$_.MediaLink.Segments[2] -eq $currenDataDisk.Name}).DiskName

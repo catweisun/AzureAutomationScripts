@@ -73,18 +73,18 @@ if ( $sourceVM -eq $null )
 # check if VM is shut down
 if ( $sourceVM.Status -notmatch "Stopped" )
 {
-    Write-Host "[Warning] - Stopping the VM is a required step so that the file system is consistent when you do the copy operation. Azure does not support live migration at this time. If you’d like to create a VM from a generalized image, sys-prep the Virtual Machine before stopping it." -ForegroundColor Green
+    Write-Host "[Warning] - Stopping the VM is a required step so that the file system is consistent when you do the copy operation. Azure does not support live migration at this time. If you’d like to create a VM from a generalized image, sys-prep the Virtual Machine before stopping it." -ForegroundColor Yellow
     $ContinueAnswer = Read-Host "`n`tDo you wish to stop $SourceVMName now? (Y/N)"
     If ($ContinueAnswer -ne "Y") { Write-Host "`n Exiting." -ForegroundColor Red; Exit }
     $sourceVM | Stop-AzureVM
 
     # wait until the VM is shut down
-    $VMStatus = (Get-AzureVM –ServiceName $SourceCloudServiceName –Name $vmName).Status
-    while ($VMStatus -notmatch "Stopped") 
+    $sourceVMStatus = (Get-AzureVM –ServiceName $SourceCloudServiceName –Name $SourceVMName).Status
+    while ($sourceVMStatus -notmatch "Stopped") 
     {
-        Write-Host "Waiting VM $vmName to shut down, current status is $VMStatus" -ForegroundColor Green
+        Write-Host "Waiting VM $vmName to shut down, current status is $sourceVMStatus" -ForegroundColor Green
         Sleep -Seconds 5
-        $VMStatus = (Get-AzureVM –ServiceName $SourceCloudServiceName –Name $vmName).Status
+        $sourceVMStatus = (Get-AzureVM –ServiceName $SourceCloudServiceName –Name $SourceVMName).Status
     } 
 }
 
@@ -121,7 +121,7 @@ $DestStorageAccountName = $destStorageAccount.StorageAccountName
 $destStorageKey = (Get-AzureStorageKey -StorageAccountName $DestStorageAccountName).Primary
 
 $sourceContext = New-AzureStorageContext  –StorageAccountName $sourceStorageAccountName -StorageAccountKey $sourceStorageKey -Environment AzureChinaCloud
-$destContext = New-AzureStorageContext  –StorageAccountName $DestStorageAccountName -StorageAccountKey $destStorageKey -Environment AzureChinaCloud
+$destContext = New-AzureStorageContext  –StorageAccountName $DestStorageAccountName -StorageAccountKey $destStorageKey
 
 # Create a container of vhds if it doesn't exist
 if ((Get-AzureStorageContainer -Context $destContext -Name vhds -ErrorAction SilentlyContinue) -eq $null)
@@ -141,9 +141,11 @@ foreach($disk in $allDisks)
     Write-Host "Starting copying data disk $($disk.DiskName) at $(get-date)." -ForegroundColor Green
     $sourceBlob = "https://" + $disk.MediaLink.Host + "/vhds/"
     $targetBlob = $destStorageAccount.Endpoints[0] + "vhds/"
+    $azcopylog = "azcopy-" + $SourceCloudServiceName + "-" + $SourceVMName +".log"
     Write-Host "Start copy vhd to destination storage account"  -ForegroundColor Green
-    Write-Host .\Tools\AzCopy.exe /Source:$sourceBlob /Dest:$targetBlob /SourceKey:$sourceStorageKey /DestKey:$destStorageKey /Pattern:$blobName /SyncCopy -ForegroundColor Green
-    .\Tools\AzCopy.exe /Source:$sourceBlob /Dest:$targetBlob /SourceKey:$sourceStorageKey /DestKey:$destStorageKey /Pattern:$blobName /SyncCopy
+    Write-Host .\Tools\AzCopy.exe /Source:$sourceBlob /Dest:$targetBlob /SourceKey:$sourceStorageKey /DestKey:$destStorageKey /Pattern:$blobName /SyncCopy /v:$azcopylog -ForegroundColor Green
+    .\Tools\AzCopy.exe /Source:$sourceBlob /Dest:$targetBlob /SourceKey:$sourceStorageKey /DestKey:$destStorageKey /Pattern:$blobName /SyncCopy /v:$azcopylog 
+
     if ($disk –eq $sourceOSDisk)
     {
         $destOSDisk = $targetBlob + $blobName
@@ -154,6 +156,8 @@ foreach($disk in $allDisks)
     }
 }
 
+# Create OS and data disks 
+Write-Host "Add VM OS Disk " $destOSDisk.MediaLink -ForegroundColor Green
 Add-AzureDisk -OS $sourceOSDisk.OS -DiskName $sourceOSDisk.DiskName -MediaLocation $destOSDisk
 # Attached the copied data disks to the new VM
 foreach($currenDataDisk in $destDataDisks)
